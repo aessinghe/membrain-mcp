@@ -1,0 +1,58 @@
+{
+  "manifest_version": "0.4",
+  "name": "membrain-mcp",
+  "display_name": "Membrain CRM",
+  "version": "0.1.5",
+  "description": "Adaptateur MCP en lecture/ecriture vers l'API Membrain (Companies, Contacts, Opportunities, Prospects, Notes, Tasks).",
+  "author": {
+    "name": "Adriano Essinghe"
+  },
+  "server": {
+    "type": "uv",
+    "entry_point": "run.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "${__dirname}",
+        "run.py"
+      ],
+      "env": {
+        "MEMBRAIN_API_KEY": "${user_config.membrain_api_key}",
+        "MEMBRAIN_BASE_URL": "${user_config.membrain_base_url}"
+      }
+    }
+  },
+  "user_config": {
+    "membrain_api_key": {
+      "type": "string",
+      "title": "Cle API Membrain",
+      "description": "Cle API generee dans Membrain (Settings > Membrain API > Membrain API Key).",
+      "sensitive": true,
+      "required": true
+    },
+    "membrain_base_url": {
+      "type": "string",
+      "title": "URL de l'API Membrain",
+      "description": "Point d'entree de l'API v2 pour votre organisation.",
+      "sensitive": false,
+      "required": false,
+      "default": "https://<your-domain>.membrain.com/API/v2/"
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "win32",
+      "darwin"
+    ],
+    "runtimes": {
+      "python": ">=3.12"
+    }
+  },
+  "keywords": [
+    "membrain",
+    "crm",
+    "mcp"],
+  "license": "UNLICENSED"
+}

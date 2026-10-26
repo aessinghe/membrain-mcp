@@ -1,0 +1,116 @@
+name: CI for membrain-mcp
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # setup-uv only publishes immutable full-version tags from v8 onward (no
+      # moving @v10 alias) - bump this deliberately when adopting a newer release.
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Run tests
+        run: uv run pytest --cov=src --cov-report=xml --cov-report=html -v
+
+      - name: Display coverage report
+        run: uv run coverage report
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov
+          retention-days: 7
+
+  lint:
+    runs-on: ubuntu-latest
+    # Serialize after build-and-test so nothing stacks on the shared runner.
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Ruff (lint)
+        run: uv run ruff check .
+
+      - name: Mypy (types)
+        run: uv run mypy src
+
+      - name: pip-audit (dependency vulnerabilities)
+        run: uv run pip-audit
+
+  security:
+    runs-on: ubuntu-latest
+    needs: [build-and-test, lint]
+    if: always() && needs.build-and-test.result == 'success'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Generate and upload bandit report
+        run: |
+          # -x .venv excludes uv's own venv from the scan; see [tool.bandit] in
+          # pyproject.toml for the rest of the exclusions (tests/).
+          # `|| true` so a finding doesn't abort the step before the summary is
+          # written below; the jq check on the result count is the actual gate.
+          uv run bandit -c pyproject.toml -r src -x .venv -f json -o bandit-report.json || true
+
+          echo '### Security Report (bandit)' >> "$GITHUB_STEP_SUMMARY"
+          echo "| File | Line | Issue |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|------|------|-------|" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '.results[] | "| \(.filename) | \(.line_number) | \(.issue_text) |"' bandit-report.json >> "$GITHUB_STEP_SUMMARY"
+
+          FOUND=$(jq '.results | length' bandit-report.json)
+          if [[ "$FOUND" -gt 0 ]]; then
+            echo "**Total issues found: $FOUND**" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          else
+            echo "**No security issues found. All good!**" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload bandit report
+        # Always upload: the report matters most on the runs that fail the gate.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-report
+          path: bandit-report.json
+          retention-days: 7

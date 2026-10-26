@@ -1,0 +1,24 @@
+# Third-party API documentation (local reference only, not redistributed)
+membrain-doc.txt
+
+# Environments
+.venv/
+.env*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+
+# Workflows
+.github/workflows/deployment*
+
+# Claude Code local (per-user) settings - not shared project config
+.claude/settings.local.json
